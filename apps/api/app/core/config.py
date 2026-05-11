@@ -114,5 +114,35 @@ class Settings(BaseSettings):
     system_log_max_bytes: int = Field(default=5_000_000, ge=100_000, le=50_000_000)
     system_log_backup_count: int = Field(default=3, ge=1, le=20)
 
+    # Phase 8 — digital twin + idle learning (local-first; never silent autonomy)
+    evolution_idle_enabled: bool = Field(
+        default=True,
+        description="Allow POST /evolution/idle (and scheduled ticks when enabled) to run bounded idle learning",
+    )
+    evolution_idle_schedule_enabled: bool = Field(
+        default=False,
+        description="If true, start an asyncio background loop that runs idle learning every interval (opt-in)",
+    )
+    evolution_idle_schedule_interval_s: int = Field(
+        default=3600,
+        ge=300,
+        le=86400,
+        description="Seconds between scheduled idle learning ticks (min 5m, max 24h)",
+    )
+    evolution_knowledge_enabled: bool = Field(
+        default=True,
+        description="Local SQLite knowledge chunks + optional Ollama embeddings for /evolution/knowledge/*",
+    )
+    evolution_knowledge_embed_model: str = Field(
+        default="",
+        description="Ollama model for embeddings; empty uses default_ollama_model",
+    )
+    evolution_knowledge_search_max_rows: int = Field(
+        default=800,
+        ge=50,
+        le=5000,
+        description="Max recent chunks scanned per similarity search (local-first cap)",
+    )
+
 
 settings = Settings()

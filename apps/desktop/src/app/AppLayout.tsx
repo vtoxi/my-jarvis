@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   MessageSquare,
   Orbit,
+  Atom,
   Settings2,
   Zap,
 } from "lucide-react";
@@ -32,6 +33,7 @@ const nav = [
   { to: "/slack", label: "Slack", icon: MessageSquare },
   { to: "/copilot", label: "Copilot", icon: Eye },
   { to: "/evolution", label: "Evolution", icon: Orbit },
+  { to: "/evolution-lab", label: "Evolution lab", icon: Atom },
   { to: "/settings", label: "Settings", icon: Settings2 },
 ];
 

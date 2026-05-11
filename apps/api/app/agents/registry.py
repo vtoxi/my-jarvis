@@ -66,4 +66,25 @@ STATIC_AGENTS: list[dict[str, Any]] = [
         "enabled": True,
         "description": "Synthesize static analysis and technical debt narratives",
     },
+    {
+        "id": "twin_analyst",
+        "name": "Executive Twin Analyst",
+        "phase": 8,
+        "enabled": True,
+        "description": "Models workflow and style preferences locally — not identity delegation",
+    },
+    {
+        "id": "idle_learning",
+        "name": "Idle Learning Officer",
+        "phase": 8,
+        "enabled": True,
+        "description": "Idle-cycle synthesis over local signals; approval-gated actions only",
+    },
+    {
+        "id": "evolution_governor",
+        "name": "Evolution Governor",
+        "phase": 8,
+        "enabled": True,
+        "description": "Safety and audit framing for self-evolution proposals",
+    },
 ]

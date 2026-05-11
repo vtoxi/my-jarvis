@@ -9,6 +9,7 @@ import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { MetricsPage } from "@/features/metrics/MetricsPage";
 import { SettingsPage } from "@/features/settings/SettingsPage";
 import { CopilotPage } from "@/features/copilot/CopilotPage";
+import { EvolutionLabPage } from "@/features/evolution/EvolutionLabPage";
 import { SystemEvolutionPage } from "@/features/evolution/SystemEvolutionPage";
 import { SlackHubPage } from "@/features/slack/SlackHubPage";
 
@@ -25,6 +26,7 @@ export function App() {
         <Route path="/slack" element={<SlackHubPage />} />
         <Route path="/copilot" element={<CopilotPage />} />
         <Route path="/evolution" element={<SystemEvolutionPage />} />
+        <Route path="/evolution-lab" element={<EvolutionLabPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

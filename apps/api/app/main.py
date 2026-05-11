@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -15,6 +17,7 @@ from app.api import (
     routes_sibling_projects,
     routes_slack,
     routes_system,
+    routes_evolution,
 )
 from app.core.automation_state import AutomationState
 from app.core.screen_intel_state import ScreenIntelState
@@ -25,6 +28,8 @@ from app.memory.store import MemoryStore
 from app.services.hammerspoon_service import HammerspoonService
 from app.services.ollama_client import OllamaClient
 from app.services.sibling_projects_service import SiblingProcessManager
+from app.services.evolution_store import EvolutionStore as Phase8EvolutionStore
+from app.services.idle_scheduler import evolution_idle_scheduler_loop
 from app.services.system_evolution_store import SystemEvolutionStore
 
 
@@ -52,7 +57,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     evolution = SystemEvolutionStore(settings)
     await evolution.setup()
     app.state.system_evolution = evolution
+    evo8 = Phase8EvolutionStore(settings)
+    await evo8.setup()
+    app.state.evolution = evo8
+    idle_schedule_task: asyncio.Task[None] | None = None
+    if settings.evolution_idle_schedule_enabled and settings.evolution_idle_enabled:
+        idle_schedule_task = asyncio.create_task(
+            evolution_idle_scheduler_loop(app, settings),
+            name="jarvis_evolution_idle_schedule",
+        )
     yield
+    if idle_schedule_task is not None:
+        idle_schedule_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await idle_schedule_task
     sibling_mgr.stop_all()
 
 
@@ -76,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(routes_phase5.router)
     app.include_router(routes_sibling_projects.router)
     app.include_router(routes_system.router)
+    app.include_router(routes_evolution.router)
     return app
 
 

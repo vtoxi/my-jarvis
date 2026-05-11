@@ -34,3 +34,18 @@ class OllamaClient:
                 },
             )
         return out
+
+    async def embed(self, *, model: str, text: str) -> list[float]:
+        """POST /api/embeddings — used for local knowledge graph (Phase 8.1)."""
+        prompt = (text or "")[:16_000]
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            res = await client.post(
+                f"{self.base_url}/api/embeddings",
+                json={"model": model, "prompt": prompt},
+            )
+            res.raise_for_status()
+            data = res.json()
+        emb = data.get("embedding")
+        if not isinstance(emb, list) or not emb:
+            raise ValueError("ollama embeddings: missing embedding array")
+        return [float(x) for x in emb]

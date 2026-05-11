@@ -324,6 +324,93 @@ export async function postSystemRepair(
   return (await res.json()) as SystemRepairResponse;
 }
 
+export type EvolutionStatus = {
+  twin_version: number;
+  twin_confidence: Record<string, number>;
+  last_idle_run_at: string | null;
+  last_idle_run_id: string | null;
+  pending_approvals: number;
+  evolution_events_24h: number;
+  strategic_maturity_index: number;
+  self_healing_hint?: string | null;
+  ethics_note?: string;
+  idle_schedule_enabled?: boolean;
+  idle_schedule_interval_s?: number | null;
+  knowledge_enabled?: boolean;
+  knowledge_chunk_count?: number;
+};
+
+export type EvolutionSandboxBenchmarkResponse = {
+  ok: boolean;
+  skipped?: boolean;
+  reason?: string | null;
+  repo_root?: string | null;
+  summary?: Record<string, unknown> | null;
+  note?: string;
+};
+
+export type EvolutionIdleResponse = {
+  run_id: string;
+  report_markdown: string;
+  actions_proposed: string[];
+  requires_approval: boolean;
+};
+
+export type EvolutionLogEntry = {
+  id: number;
+  created_at: string;
+  kind: string;
+  payload: Record<string, unknown>;
+};
+
+export async function fetchEvolutionStatus(baseUrl: string, signal?: AbortSignal): Promise<EvolutionStatus> {
+  const res = await fetch(joinUrl(baseUrl, "/evolution/status"), { signal, method: "GET" });
+  if (!res.ok) throw new Error(`evolution status ${res.status}`);
+  return (await res.json()) as EvolutionStatus;
+}
+
+export async function postEvolutionIdle(baseUrl: string, signal?: AbortSignal): Promise<EvolutionIdleResponse> {
+  const res = await fetch(joinUrl(baseUrl, "/evolution/idle"), { method: "POST", signal });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(t || `evolution idle ${res.status}`);
+  }
+  return (await res.json()) as EvolutionIdleResponse;
+}
+
+export async function postEvolutionSandboxBenchmark(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<EvolutionSandboxBenchmarkResponse> {
+  const res = await fetch(joinUrl(baseUrl, "/evolution/sandbox/benchmark"), { method: "POST", signal });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(t || `evolution sandbox benchmark ${res.status}`);
+  }
+  return (await res.json()) as EvolutionSandboxBenchmarkResponse;
+}
+
+export async function fetchEvolutionLogs(
+  baseUrl: string,
+  limit = 40,
+  signal?: AbortSignal,
+): Promise<{ entries: EvolutionLogEntry[] }> {
+  const u = joinUrl(baseUrl, "/evolution/logs");
+  u.searchParams.set("limit", String(limit));
+  const res = await fetch(u, { signal, method: "GET" });
+  if (!res.ok) throw new Error(`evolution logs ${res.status}`);
+  return (await res.json()) as { entries: EvolutionLogEntry[] };
+}
+
+export async function fetchEvolutionPredictions(
+  baseUrl: string,
+  signal?: AbortSignal,
+): Promise<{ predictions: { id: string; severity: string; title: string; detail: string }[] }> {
+  const res = await fetch(joinUrl(baseUrl, "/evolution/predictions"), { signal, method: "GET" });
+  if (!res.ok) throw new Error(`evolution predictions ${res.status}`);
+  return (await res.json()) as { predictions: { id: string; severity: string; title: string; detail: string }[] };
+}
+
 export function slackConnectUrl(baseUrl: string): string {
   return joinUrl(baseUrl, "/slack/connect").href;
 }

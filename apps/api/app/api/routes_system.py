@@ -66,7 +66,7 @@ def _tail_log_file(path: Path | None, *, max_lines: int) -> tuple[list[str], boo
 
 @router.get("/system/health", response_model=SystemHealthResponse)
 async def system_health(request: Request) -> SystemHealthResponse:
-    return await gather_system_health(request, settings)
+    return await gather_system_health(request.app, settings)
 
 
 @router.get("/system/errors", response_model=SystemErrorsResponse)
@@ -122,7 +122,7 @@ async def system_performance() -> SystemPerformanceResponse:
 @router.post("/system/repair", response_model=SystemRepairResponse)
 async def system_repair(request: Request, body: SystemRepairRequest) -> SystemRepairResponse:
     store = _evo(request)
-    health = await gather_system_health(request, settings)
+    health = await gather_system_health(request.app, settings)
     health_json = health.model_dump_json()
     log_path = getattr(request.app.state, "api_log_path", None)
     tail, _ = _tail_log_file(log_path if isinstance(log_path, Path) else None, max_lines=160)

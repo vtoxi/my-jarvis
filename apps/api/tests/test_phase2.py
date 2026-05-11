@@ -42,4 +42,15 @@ def test_agents_status() -> None:
         assert res.status_code == 200
         agents = res.json()["agents"]
         ids = {a["id"] for a in agents}
-        assert {"commander", "planner", "slack", "interpreter", "executor", "self_healing", "code_audit"}.issubset(ids)
+        assert {
+            "commander",
+            "planner",
+            "slack",
+            "interpreter",
+            "executor",
+            "self_healing",
+            "code_audit",
+            "twin_analyst",
+            "idle_learning",
+            "evolution_governor",
+        }.issubset(ids)

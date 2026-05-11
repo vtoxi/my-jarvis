@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import aiosqlite
-from fastapi import Request
+from starlette.applications import Starlette
 
 from app.core.config import Settings
 from app.schemas.system import SubsystemHealth, SystemHealthResponse
@@ -31,14 +31,14 @@ async def _sqlite_ok(db_path: Path) -> tuple[bool, str | None]:
         return False, str(e)[:500]
 
 
-async def gather_system_health(request: Request, settings: Settings) -> SystemHealthResponse:
+async def gather_system_health(app: Starlette, settings: Settings) -> SystemHealthResponse:
     t0 = time.perf_counter()
     subsystems: list[SubsystemHealth] = []
     notes: list[str] = []
 
     subsystems.append(SubsystemHealth(id="api", ok=True, detail="FastAPI process up"))
 
-    ollama = getattr(request.app.state, "ollama", None)
+    ollama = getattr(app.state, "ollama", None)
     if ollama is None:
         subsystems.append(SubsystemHealth(id="ollama", ok=False, detail="server_state_missing"))
     else:
@@ -67,7 +67,7 @@ async def gather_system_health(request: Request, settings: Settings) -> SystemHe
             SubsystemHealth(id="slack", ok=False, detail=str(e)[:200], optional_for_score=not slack_configured),
         )
 
-    hammo = getattr(request.app.state, "hammerspoon", None)
+    hammo = getattr(app.state, "hammerspoon", None)
     # Mac HTTP bridge — not systemd; optional for aggregate score unless you rely on Control deck automation.
     if hammo is not None:
         t_h = time.perf_counter()
@@ -98,7 +98,7 @@ async def gather_system_health(request: Request, settings: Settings) -> SystemHe
     else:
         subsystems.append(SubsystemHealth(id="hammerspoon", ok=False, detail="not initialized", optional_for_score=True))
 
-    sib = getattr(request.app.state, "sibling_projects", None)
+    sib = getattr(app.state, "sibling_projects", None)
     if sib is not None:
         st = sib.status()
         for key in ("open_interpreter", "crewai"):
@@ -119,7 +119,7 @@ async def gather_system_health(request: Request, settings: Settings) -> SystemHe
     else:
         notes.append("sibling_projects state missing")
 
-    intel = getattr(request.app.state, "screen_intel", None)
+    intel = getattr(app.state, "screen_intel", None)
     if intel is not None:
         err = getattr(intel, "last_capture_error", None)
         subsystems.append(
