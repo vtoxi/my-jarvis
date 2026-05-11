@@ -4,6 +4,8 @@ export type SystemStatus = {
   hammerspoon_reachable: boolean;
   last_error: string | null;
   recent_logs: Record<string, unknown>[];
+  autonomy_tier?: string;
+  autonomy_note?: string;
 };
 
 export type ProfileInfo = {

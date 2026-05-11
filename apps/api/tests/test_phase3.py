@@ -7,6 +7,16 @@ from app.core.config import settings
 from app.main import create_app
 
 
+def test_system_status_includes_autonomy_tier(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "autonomy_tier", "elevated")
+    with TestClient(create_app()) as client:
+        res = client.get("/system/status")
+        assert res.status_code == 200
+        body = res.json()
+        assert body.get("autonomy_tier") == "elevated"
+        assert "Elevated" in (body.get("autonomy_note") or "")
+
+
 def test_permissions_check_restricted() -> None:
     with TestClient(create_app()) as client:
         res = client.post(
@@ -37,6 +47,22 @@ def test_kill_disarms_workflow(tmp_path: Path) -> None:
             assert "automation_disarmed" in errs or "disarmed" in (wf.json().get("message") or "").lower()
     finally:
         settings.data_dir, settings.automation_sandbox = prev
+
+
+def test_workflow_elevated_skips_confirm_challenge(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "autonomy_tier", "elevated")
+    monkeypatch.setattr(settings, "data_dir", tmp_path)
+    monkeypatch.setattr(settings, "automation_sandbox", True)
+    with TestClient(create_app()) as client:
+        client.post("/system/arm", json={"armed": True})
+        wf = client.post(
+            "/workflows/run",
+            json={"profile_id": "morning", "session_id": "sess-elevated-aa"},
+        )
+        assert wf.status_code == 200
+        data = wf.json()
+        assert data.get("pending") is not True
+        assert data.get("ok") is True
 
 
 def test_workflow_sandbox_morning(tmp_path: Path) -> None:

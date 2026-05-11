@@ -28,6 +28,7 @@ from app.memory.store import MemoryStore
 from app.services.hammerspoon_service import HammerspoonService
 from app.services.ollama_client import OllamaClient
 from app.services.sibling_projects_service import SiblingProcessManager
+from app.services.autowork_scheduler import autowork_scheduler_loop
 from app.services.evolution_store import EvolutionStore as Phase8EvolutionStore
 from app.services.idle_scheduler import evolution_idle_scheduler_loop
 from app.services.system_evolution_store import SystemEvolutionStore
@@ -66,11 +67,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             evolution_idle_scheduler_loop(app, settings),
             name="jarvis_evolution_idle_schedule",
         )
+    autowork_task: asyncio.Task[None] | None = None
+    if settings.autowork_schedule_enabled and settings.autowork_enabled:
+        autowork_task = asyncio.create_task(autowork_scheduler_loop(app, settings), name="jarvis_autowork_schedule")
     yield
     if idle_schedule_task is not None:
         idle_schedule_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await idle_schedule_task
+    if autowork_task is not None:
+        autowork_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await autowork_task
     sibling_mgr.stop_all()
 
 

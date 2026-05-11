@@ -69,6 +69,11 @@ class SystemStatusResponse(BaseModel):
     hammerspoon_reachable: bool
     last_error: str | None
     recent_logs: list[dict[str, Any]]
+    autonomy_tier: str = Field(default="standard", description="standard | elevated")
+    autonomy_note: str = Field(
+        default="",
+        description="Human-readable summary of autonomy behavior for this process",
+    )
 
 
 class KillResponse(BaseModel):

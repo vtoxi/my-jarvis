@@ -28,7 +28,11 @@ def _stub(health_blob: str, log_tail: str, ctx: str | None) -> SelfHealingResult
         root_cause_hypothesis="Insufficient model signal; operator should review raw health JSON.",
         severity="info",
         user_visible_summary=summary,
-        recommended_commands=["Review GET /system/health JSON", "Check API logs under data_dir/logs"],
+        recommended_commands=[
+            "Review GET /system/health JSON",
+            "Check API logs under data_dir/logs",
+            "Optional: POST /screen/capture — paste relevant OCR into the next POST /system/repair `context`",
+        ],
         patch_plan=[],
         raw_markdown=f"### Context\n{ctx or '(none)'}\n\n### Health digest\n```json\n{health_blob[:2000]}\n```\n\n### Log tail\n```\n{log_tail[:1500]}\n```\n",
     )
@@ -67,6 +71,9 @@ def run_self_healing_crew(
             f"```json\n{health_json[:12000]}\n```\n\n"
             "### Recent log lines\n"
             f"```\n{log_tail[:6000]}\n```\n\n"
+            "If signals are insufficient, explicitly tell the operator to refresh screen context (JARVIS /screen/*) and "
+            "paste OCR or error text — JARVIS must not claim it can move the mouse or keyboard without Hammerspoon "
+            "operator approvals.\n\n"
             "Produce markdown with EXACTLY these headings in order:\n"
             "## Root cause hypothesis\n"
             "## Severity\n(one word: info|low|medium|high|critical)\n"

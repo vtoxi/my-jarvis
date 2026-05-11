@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import os
 from pathlib import Path
@@ -9,6 +10,7 @@ import anyio
 from fastapi import APIRouter, HTTPException, Request
 
 from app.core.config import settings
+from app.core.operator_takeover import operator_takeover_lines
 from app.schemas.system import (
     IncidentRecord,
     SystemAuditRequest,
@@ -27,12 +29,16 @@ from app.schemas.system import (
     SystemRollbackPrepareResponse,
     SystemRollbackRequest,
     SystemRollbackResponse,
+    SystemAutoworkStatusResponse,
+    SystemAutoworkTickResponse,
 )
+from app.services.autowork_service import run_autowork_cycle
 from app.services.code_audit_crew_runner import run_code_audit_crew
 from app.services.diagnostics_service import gather_system_health, gather_tooling_for_audit
 from app.services.patch_service import apply_patch, mint_apply_token_for_prepare, persist_prepare_row, prepare_patch
 from app.services.performance_monitor import collect_performance_metrics
 from app.services.rollback_service import apply_rollback, mint_rollback_for_patch
+from app.services.evolution_store import EvolutionStore as Phase8EvolutionStore
 from app.services.self_healing_crew_runner import run_self_healing_crew
 
 logger = logging.getLogger(__name__)
@@ -45,6 +51,11 @@ def _evo(request: Request) -> Any:
     if st is None:
         raise HTTPException(status_code=503, detail="System evolution store not initialized")
     return st
+
+
+def _evo8(request: Request) -> Phase8EvolutionStore | None:
+    st = getattr(request.app.state, "evolution", None)
+    return st if isinstance(st, Phase8EvolutionStore) else None
 
 
 def _tail_log_file(path: Path | None, *, max_lines: int) -> tuple[list[str], bool]:
@@ -141,7 +152,15 @@ async def system_repair(request: Request, body: SystemRepairRequest) -> SystemRe
         result = await anyio.to_thread.run_sync(work)
     except Exception as e:
         logger.exception("self-healing crew")
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": str(e),
+                "operator_takeover": operator_takeover_lines(
+                    extra="Repair crew crashed — check API stderr, reproduce once, then paste screen/log context into the next repair request.",
+                ),
+            },
+        ) from e
 
     detail = {
         "health_status": health.status,
@@ -171,6 +190,9 @@ async def system_repair(request: Request, body: SystemRepairRequest) -> SystemRe
         recommended_commands=result.recommended_commands,
         patch_plan=result.patch_plan,
         raw_markdown=result.raw_markdown,
+        operator_takeover_checklist=operator_takeover_lines(
+            extra="Recommended commands are suggestions only — run them yourself in Terminal after you understand each line.",
+        ),
     )
 
 
@@ -193,7 +215,15 @@ async def system_audit(request: Request, body: SystemAuditRequest) -> SystemAudi
         result = await anyio.to_thread.run_sync(work)
     except Exception as e:
         logger.exception("code audit crew")
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": str(e),
+                "operator_takeover": operator_takeover_lines(
+                    extra="Audit/improve crew failed — use GET /system/logs and local ruff/mypy if subprocess tools are disabled.",
+                ),
+            },
+        ) from e
 
     aid = await store.insert_audit_run(
         mode=body.mode,
@@ -201,6 +231,12 @@ async def system_audit(request: Request, body: SystemAuditRequest) -> SystemAudi
         synthesis=result.synthesis_markdown[:24000],
         debt_score=result.debt_score,
     )
+    audit_extra: str | None = None
+    if isinstance(tools, dict) and tools.get("skipped"):
+        audit_extra = (
+            f"Repo tooling was skipped in this audit: {tools.get('reason')!s}. "
+            "Set JARVIS_REPO_ROOT and JARVIS_SYSTEM_ALLOW_SUBPROCESS=true to let the API run ruff/mypy/pytest, or run them locally."
+        )
     return SystemAuditResponse(
         audit_id=aid,
         mode=body.mode,
@@ -208,6 +244,7 @@ async def system_audit(request: Request, body: SystemAuditRequest) -> SystemAudi
         debt_score=result.debt_score,
         synthesis_markdown=result.synthesis_markdown,
         categories=result.categories,
+        operator_takeover_checklist=operator_takeover_lines(extra=audit_extra),
     )
 
 
@@ -283,3 +320,50 @@ async def system_rollback(request: Request, body: SystemRollbackRequest) -> Syst
     store = _evo(request)
     res = await apply_rollback(settings, store, token=body.approval_token, patch_id=body.patch_id)
     return SystemRollbackResponse(ok=res["ok"], message=res["message"])
+
+
+@router.get("/system/autowork/status", response_model=SystemAutoworkStatusResponse)
+async def system_autowork_status() -> SystemAutoworkStatusResponse:
+    last_path = settings.data_dir / "autowork" / "last_run.json"
+    restart_path = settings.data_dir / "autowork" / "RESTART_REQUESTED.json"
+    last: dict[str, Any] | None = None
+    if last_path.is_file():
+        try:
+            last = json.loads(last_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            last = {"error": "unreadable last_run.json"}
+    return SystemAutoworkStatusResponse(
+        enabled=bool(settings.autowork_enabled),
+        schedule_enabled=bool(settings.autowork_schedule_enabled),
+        interval_s=int(settings.autowork_interval_s),
+        last_run=last,
+        restart_request_path=str(restart_path) if restart_path.is_file() else None,
+        restart_pending=restart_path.is_file(),
+    )
+
+
+@router.post("/system/autowork/tick", response_model=SystemAutoworkTickResponse)
+async def system_autowork_tick(request: Request) -> SystemAutoworkTickResponse:
+    if not settings.autowork_enabled:
+        raise HTTPException(status_code=403, detail="JARVIS_AUTOWORK_ENABLED=false")
+    try:
+        summary = await anyio.to_thread.run_sync(lambda: run_autowork_cycle(settings))
+    except Exception as e:
+        logger.exception("autowork tick")
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    logged = False
+    evo = _evo8(request)
+    if evo is not None:
+        try:
+            await evo.append_event(
+                kind="autowork_tick",
+                payload={
+                    "ok": summary.get("ok"),
+                    "elapsed_s": summary.get("elapsed_s"),
+                    "restart_requested": summary.get("restart_requested"),
+                },
+            )
+            logged = True
+        except Exception:
+            logger.exception("autowork evolution event")
+    return SystemAutoworkTickResponse(ok=bool(summary.get("ok")), summary=summary, event_logged=logged)

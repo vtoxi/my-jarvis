@@ -48,6 +48,24 @@ def test_system_audit_stub_no_subprocess(monkeypatch) -> None:
         body = res.json()
         assert body.get("audit_id")
         assert "debt_score" in body
+        assert isinstance(body.get("operator_takeover_checklist"), list)
+        assert len(body.get("operator_takeover_checklist") or []) >= 2
+
+
+def test_system_repair_502_includes_operator_takeover(monkeypatch) -> None:
+    def _boom(**_kwargs: object) -> None:
+        raise RuntimeError("crew unavailable")
+
+    monkeypatch.setattr("app.api.routes_system.run_self_healing_crew", _boom)
+    with TestClient(create_app()) as client:
+        res = client.post("/system/repair", json={"context": "test"})
+        assert res.status_code == 502
+        body = res.json()
+        detail = body.get("detail")
+        assert isinstance(detail, dict)
+        assert detail.get("message")
+        assert isinstance(detail.get("operator_takeover"), list)
+        assert len(detail["operator_takeover"]) >= 2
 
 
 def test_system_repair_stub(monkeypatch) -> None:
@@ -58,6 +76,8 @@ def test_system_repair_stub(monkeypatch) -> None:
         body = res.json()
         assert body.get("incident_id")
         assert body.get("requires_human_approval") is True
+        assert isinstance(body.get("operator_takeover_checklist"), list)
+        assert len(body.get("operator_takeover_checklist") or []) >= 2
 
 
 def test_patch_token_roundtrip() -> None:

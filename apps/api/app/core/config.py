@@ -1,7 +1,10 @@
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+AutonomyTier = Literal["standard", "elevated"]
 
 
 class Settings(BaseSettings):
@@ -18,6 +21,14 @@ class Settings(BaseSettings):
     crew_verbose: bool = Field(default=False)
 
     # Phase 3 — automation
+    autonomy_tier: AutonomyTier = Field(
+        default="standard",
+        description=(
+            "standard: confirm-tier automation requires a challenge token before Hammerspoon. "
+            "elevated: confirm-tier runs without second POST (logged); restricted patterns still blocked. "
+            "Does not enable Slack auto-send, patches without tokens, or macOS TCC bypass."
+        ),
+    )
     automation_sandbox: bool = Field(
         default=False,
         description="If true, log actions only; do not call Hammerspoon or interpreter subprocess",
@@ -113,6 +124,39 @@ class Settings(BaseSettings):
     )
     system_log_max_bytes: int = Field(default=5_000_000, ge=100_000, le=50_000_000)
     system_log_backup_count: int = Field(default=3, ge=1, le=20)
+
+    # Autowork — bounded self-maintenance (opt-in; never in-process restart; no auto git apply)
+    autowork_enabled: bool = Field(
+        default=False,
+        description="Allow POST /system/autowork/tick and optional background autowork scheduler",
+    )
+    autowork_schedule_enabled: bool = Field(
+        default=False,
+        description="Background asyncio loop running autowork on autowork_interval_s",
+    )
+    autowork_interval_s: int = Field(
+        default=86_400,
+        ge=600,
+        le=604_800,
+        description="Seconds between scheduled autowork ticks (10 min – 7 days)",
+    )
+    autowork_poetry_install: bool = Field(
+        default=False,
+        description="When subprocess allowed: poetry install under apps/api (can modify lock/env)",
+    )
+    autowork_ruff_autofix: bool = Field(
+        default=False,
+        description="When subprocess allowed: ruff check --fix under apps/api",
+    )
+    autowork_npm_build: bool = Field(
+        default=False,
+        description="When subprocess allowed: npm run build under apps/desktop",
+    )
+    autowork_restart_request_on_green: bool = Field(
+        default=False,
+        description="Write RESTART_REQUESTED.json when repo_checks all non-skipped tools pass (operator restarts manually)",
+    )
+    autowork_subprocess_timeout_s: int = Field(default=600, ge=30, le=3600)
 
     # Phase 8 — digital twin + idle learning (local-first; never silent autonomy)
     evolution_idle_enabled: bool = Field(

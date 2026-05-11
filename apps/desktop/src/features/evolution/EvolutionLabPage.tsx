@@ -163,6 +163,15 @@ export function EvolutionLabPage() {
                   : (status?.knowledge_chunk_count ?? "—")}
               </dd>
             </div>
+            <div className="flex justify-between gap-2">
+              <dt className="text-muted-foreground">Autonomy tier</dt>
+              <dd className="max-w-[58%] text-right text-[10px] leading-snug">
+                {status?.autonomy_tier ?? "—"}
+                {status?.autonomy_note ? (
+                  <span className="mt-1 block text-muted-foreground">{status.autonomy_note}</span>
+                ) : null}
+              </dd>
+            </div>
           </dl>
           <p className="mt-4 text-[11px] leading-relaxed text-muted-foreground">{status?.ethics_note}</p>
         </GlassPanel>

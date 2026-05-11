@@ -71,6 +71,10 @@ class SystemRepairResponse(BaseModel):
     recommended_commands: list[str] = Field(default_factory=list)
     patch_plan: list[dict[str, Any]] = Field(default_factory=list)
     raw_markdown: str | None = None
+    operator_takeover_checklist: list[str] = Field(
+        default_factory=list,
+        description="Why the operator must act locally (keyboard, logs, screen) — JARVIS does not self-drive the OS",
+    )
 
 
 class SystemAuditRequest(BaseModel):
@@ -88,6 +92,10 @@ class SystemAuditResponse(BaseModel):
     categories: dict[str, list[str]] = Field(
         default_factory=dict,
         description="A–E buckets: stability, performance, architecture, ux, security",
+    )
+    operator_takeover_checklist: list[str] = Field(
+        default_factory=list,
+        description="If audit tools were skipped or failed, what the human should do next",
     )
 
 
@@ -136,3 +144,21 @@ class SystemRollbackRequest(BaseModel):
 class SystemRollbackResponse(BaseModel):
     ok: bool
     message: str
+
+
+class SystemAutoworkStatusResponse(BaseModel):
+    enabled: bool
+    schedule_enabled: bool
+    interval_s: int
+    last_run: dict[str, Any] | None = None
+    restart_request_path: str | None = None
+    restart_pending: bool = False
+
+
+class SystemAutoworkTickResponse(BaseModel):
+    ok: bool
+    summary: dict[str, Any] = Field(default_factory=dict)
+    event_logged: bool = False
+    note: str = Field(
+        default="Artifacts under data_dir/autowork/. The API never restarts itself; apply code changes via Phase 6 patch flow with tokens.",
+    )

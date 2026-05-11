@@ -26,10 +26,32 @@ from app.schemas.automation import (
 from app.services.action_log import append_action_log, read_recent_logs
 from app.services.execution_runner import run_normalized_steps
 from app.services.hammerspoon_service import HammerspoonService
-from app.services.permissions_service import RiskTier, evaluate_plan, needs_confirmation
+from app.services.permissions_service import NormalizedStep, RiskTier, evaluate_plan, needs_confirmation
 from app.services.workflow_engine import list_profiles, load_profile_resolved
 
 router = APIRouter(tags=["automation"])
+
+
+def _automation_requires_challenge(normalized: list[NormalizedStep]) -> bool:
+    if settings.autonomy_tier == "elevated":
+        return False
+    return needs_confirmation(normalized)
+
+
+def _log_elevated_challenge_bypass(*, session_id: str, source: str, normalized: list[NormalizedStep]) -> None:
+    if settings.autonomy_tier != "elevated":
+        return
+    if not needs_confirmation(normalized):
+        return
+    append_action_log(
+        settings.data_dir,
+        {
+            "event": "elevated_autonomy_confirm_tier_bypassed",
+            "session_id": session_id,
+            "source": source,
+            "step_count": len(normalized),
+        },
+    )
 
 
 def _steps_to_dict(steps: list[ActionStepIn]) -> list[dict]:
@@ -56,7 +78,7 @@ async def permissions_check(body: PermissionsCheckRequest) -> PermissionsCheckRe
     ok = not restricted and len(errors) == 0
     return PermissionsCheckResponse(
         ok=ok,
-        needs_confirmation=needs_confirmation(normalized),
+        needs_confirmation=_automation_requires_challenge(normalized),
         errors=errors,
         normalized=[_to_out(n) for n in normalized],
     )
@@ -84,7 +106,7 @@ async def workflows_run(
     if any(n.tier == RiskTier.restricted for n in normalized):
         return WorkflowRunResponse(ok=False, errors=["restricted_step_present"], preview=[_to_out(n) for n in normalized])
 
-    need = needs_confirmation(normalized)
+    need = _automation_requires_challenge(normalized)
     if need and not body.challenge:
         cid = automation.issue_challenge(profile_id=body.profile_id)
         append_action_log(
@@ -103,6 +125,12 @@ async def workflows_run(
     if need and body.challenge:
         if not automation.consume_challenge(body.challenge, body.profile_id):
             raise HTTPException(status_code=400, detail="invalid_or_expired_challenge")
+
+    _log_elevated_challenge_bypass(
+        session_id=body.session_id,
+        source=f"workflow:{body.profile_id}",
+        normalized=normalized,
+    )
 
     result = await run_normalized_steps(
         settings=settings,
@@ -139,13 +167,15 @@ async def execute_actions(
     if any(n.tier == RiskTier.restricted for n in normalized):
         return ExecuteResponse(ok=False, errors=["restricted_step_present"], preview=[_to_out(n) for n in normalized])
 
-    need = needs_confirmation(normalized)
+    need = _automation_requires_challenge(normalized)
     if need and not body.challenge:
         cid = automation.issue_challenge(profile_id="execute_adhoc")
         return ExecuteResponse(ok=False, pending=True, challenge=cid, preview=[_to_out(n) for n in normalized])
     if need and body.challenge:
         if not automation.consume_challenge(body.challenge, "execute_adhoc"):
             raise HTTPException(status_code=400, detail="invalid_or_expired_challenge")
+
+    _log_elevated_challenge_bypass(session_id=body.session_id, source="execute", normalized=normalized)
 
     result = await run_normalized_steps(
         settings=settings,
@@ -168,12 +198,21 @@ async def system_status(
     hs: HammerspoonService = Depends(get_hammerspoon),
 ) -> SystemStatusResponse:
     reachable = await hs.health()
+    tier = settings.autonomy_tier
+    note = (
+        "Elevated: confirm-tier automation runs without a second challenge (restricted patterns still blocked). "
+        "Kill switch, sandbox, Slack write, and git patches keep their existing gates."
+        if tier == "elevated"
+        else "Standard: confirm-tier steps require a challenge before Hammerspoon dispatch."
+    )
     return SystemStatusResponse(
         armed=automation.is_armed(),
         sandbox=settings.automation_sandbox,
         hammerspoon_reachable=reachable,
         last_error=automation.last_error,
         recent_logs=read_recent_logs(settings.data_dir, limit=40),
+        autonomy_tier=tier,
+        autonomy_note=note,
     )
 
 

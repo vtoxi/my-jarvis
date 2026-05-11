@@ -20,6 +20,7 @@ def test_evolution_status_ok(monkeypatch) -> None:
         assert body.get("idle_schedule_interval_s") is None
         assert "knowledge_chunk_count" in body
         assert body.get("knowledge_enabled") is True
+        assert body.get("autonomy_tier") in ("standard", "elevated")
 
 
 def test_evolution_status_reflects_idle_schedule_flags(monkeypatch) -> None:

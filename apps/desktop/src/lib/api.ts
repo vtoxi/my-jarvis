@@ -19,6 +19,38 @@ function joinUrl(baseUrl: string, path: string): URL {
   return new URL(path, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`);
 }
 
+function parseFastApiDetailPayload(detail: unknown): { message: string; operatorTakeover: string[] } {
+  if (typeof detail === "string") return { message: detail, operatorTakeover: [] };
+  if (detail && typeof detail === "object") {
+    const o = detail as { message?: unknown; operator_takeover?: unknown };
+    const message = typeof o.message === "string" ? o.message : "Request failed";
+    const raw = o.operator_takeover;
+    const operatorTakeover = Array.isArray(raw)
+      ? raw.filter((x): x is string => typeof x === "string")
+      : [];
+    return { message, operatorTakeover };
+  }
+  return { message: "Request failed", operatorTakeover: [] };
+}
+
+function throwHttpErrorWithTakeover(label: string, status: number, bodyText: string): never {
+  let message = bodyText?.trim() || `${label} ${status}`;
+  let takeover: string[] = [];
+  try {
+    const j = JSON.parse(bodyText) as { detail?: unknown };
+    const p = parseFastApiDetailPayload(j.detail);
+    message = p.message || message;
+    takeover = p.operatorTakeover;
+  } catch {
+    /* keep message as body */
+  }
+  const err = new Error(
+    takeover.length ? [message, ...takeover.map((l) => `• ${l}`)].join("\n") : message,
+  ) as Error & { operatorTakeover?: string[] };
+  if (takeover.length) err.operatorTakeover = takeover;
+  throw err;
+}
+
 export async function fetchHealth(baseUrl: string, signal?: AbortSignal): Promise<HealthResponse> {
   const res = await fetch(joinUrl(baseUrl, "/health"), { signal, method: "GET" });
   if (!res.ok) {
@@ -242,6 +274,7 @@ export type SystemAuditResponse = {
   debt_score: number;
   synthesis_markdown: string;
   categories: Record<string, string[]>;
+  operator_takeover_checklist?: string[];
 };
 
 export type SystemRepairResponse = {
@@ -253,6 +286,7 @@ export type SystemRepairResponse = {
   recommended_commands: string[];
   patch_plan: { path?: string; rationale?: string }[];
   raw_markdown?: string | null;
+  operator_takeover_checklist?: string[];
 };
 
 export type SystemPatchRow = {
@@ -301,9 +335,40 @@ export async function postSystemAudit(
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(t || `audit ${res.status}`);
+    throwHttpErrorWithTakeover("audit", res.status, t);
   }
   return (await res.json()) as SystemAuditResponse;
+}
+
+export type SystemAutoworkStatus = {
+  enabled: boolean;
+  schedule_enabled: boolean;
+  interval_s: number;
+  last_run?: Record<string, unknown> | null;
+  restart_request_path?: string | null;
+  restart_pending?: boolean;
+};
+
+export type SystemAutoworkTickResponse = {
+  ok: boolean;
+  summary: Record<string, unknown>;
+  event_logged?: boolean;
+  note?: string;
+};
+
+export async function fetchAutoworkStatus(baseUrl: string, signal?: AbortSignal): Promise<SystemAutoworkStatus> {
+  const res = await fetch(joinUrl(baseUrl, "/system/autowork/status"), { signal, method: "GET" });
+  if (!res.ok) throw new Error(`autowork status ${res.status}`);
+  return (await res.json()) as SystemAutoworkStatus;
+}
+
+export async function postAutoworkTick(baseUrl: string, signal?: AbortSignal): Promise<SystemAutoworkTickResponse> {
+  const res = await fetch(joinUrl(baseUrl, "/system/autowork/tick"), { method: "POST", signal });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(t || `autowork tick ${res.status}`);
+  }
+  return (await res.json()) as SystemAutoworkTickResponse;
 }
 
 export async function postSystemRepair(
@@ -319,7 +384,7 @@ export async function postSystemRepair(
   });
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(t || `repair ${res.status}`);
+    throwHttpErrorWithTakeover("repair", res.status, t);
   }
   return (await res.json()) as SystemRepairResponse;
 }
@@ -338,6 +403,8 @@ export type EvolutionStatus = {
   idle_schedule_interval_s?: number | null;
   knowledge_enabled?: boolean;
   knowledge_chunk_count?: number;
+  autonomy_tier?: string;
+  autonomy_note?: string;
 };
 
 export type EvolutionSandboxBenchmarkResponse = {

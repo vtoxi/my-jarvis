@@ -24,6 +24,11 @@ import { useApiHealth } from "@/hooks/use-api-health";
 import { fetchModels } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+/** Match a nav target without treating `/evolution-lab` as under `/evolution`. */
+function navPathMatches(pathname: string, to: string): boolean {
+  return pathname === to || pathname.startsWith(`${to}/`);
+}
+
 const nav = [
   { to: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { to: "/agents", label: "Agents", icon: Bot },
@@ -32,8 +37,8 @@ const nav = [
   { to: "/control", label: "Control", icon: Zap },
   { to: "/slack", label: "Slack", icon: MessageSquare },
   { to: "/copilot", label: "Copilot", icon: Eye },
-  { to: "/evolution", label: "Evolution", icon: Orbit },
   { to: "/evolution-lab", label: "Evolution lab", icon: Atom },
+  { to: "/evolution", label: "Evolution", icon: Orbit },
   { to: "/settings", label: "Settings", icon: Settings2 },
 ];
 
@@ -91,6 +96,7 @@ export function AppLayout() {
               <NavLink
                 key={item.to}
                 to={item.to}
+                end
                 className={({ isActive }) =>
                   cn(
                     "group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
@@ -124,7 +130,9 @@ export function AppLayout() {
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-muted-foreground">Active deck</p>
             <h1 className="text-xl font-semibold tracking-tight">
-              {nav.find((n) => location.pathname.startsWith(n.to))?.label ?? "JARVIS"}
+              {[...nav]
+                .sort((a, b) => b.to.length - a.to.length)
+                .find((n) => navPathMatches(location.pathname, n.to))?.label ?? "JARVIS"}
             </h1>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-2">

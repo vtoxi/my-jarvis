@@ -174,6 +174,13 @@ export function ControlDeckPage() {
         </div>
       </div>
 
+      {status?.autonomy_tier === "elevated" ? (
+        <GlassPanel className="border-amber-500/35 bg-amber-500/10 p-4 text-xs leading-relaxed text-amber-100">
+          <p className="font-semibold text-amber-50">Elevated autonomy (API)</p>
+          <p className="mt-1 text-amber-100/90">{status.autonomy_note}</p>
+        </GlassPanel>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-3">
         <GlassPanel className="relative overflow-hidden p-6 lg:col-span-2">
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_20%_0%,hsl(var(--neon)/0.12),transparent_50%)]" />
@@ -181,7 +188,12 @@ export function ControlDeckPage() {
             <Zap className="h-8 w-8 text-[hsl(var(--neon))]" aria-hidden />
             <div>
               <p className="text-sm font-semibold">Workflow presets</p>
-              <p className="text-xs text-muted-foreground">Hammerspoon bridge — confirm when prompted.</p>
+              <p className="text-xs text-muted-foreground">
+                Hammerspoon bridge —{" "}
+                {status?.autonomy_tier === "elevated"
+                  ? "elevated autonomy: medium-risk steps run without a second confirm (kill switch still works)."
+                  : "confirm when the API prompts for a challenge token."}
+              </p>
             </div>
           </div>
           <div className="relative mt-6 flex flex-wrap gap-2">
@@ -224,6 +236,10 @@ export function ControlDeckPage() {
                 <span className={cn("font-mono", status.hammerspoon_reachable ? "text-emerald-300" : "text-amber-300")}>
                   {status.hammerspoon_reachable ? "LIVE" : "DOWN"}
                 </span>
+              </li>
+              <li className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Autonomy</span>
+                <span className="font-mono text-[11px]">{status.autonomy_tier ?? "standard"}</span>
               </li>
             </ul>
           ) : (

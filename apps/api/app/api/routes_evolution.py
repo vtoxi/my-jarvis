@@ -66,6 +66,13 @@ async def evolution_status(request: Request) -> EvolutionStatusResponse:
     smi = strategic_maturity_index(twin_payload=twin, idle_run_count=idle_n)
     sched_on = bool(settings.evolution_idle_schedule_enabled and settings.evolution_idle_enabled)
     kg_n = await store.kg_count()
+    atier = settings.autonomy_tier
+    anote = (
+        "Elevated automation: Control deck /execute and /workflows/run skip the second confirm challenge for "
+        "medium-risk steps (restricted patterns still blocked)."
+        if atier == "elevated"
+        else "Standard automation: medium-risk steps still require a challenge token before Hammerspoon runs."
+    )
     return EvolutionStatusResponse(
         twin_version=ver,
         twin_confidence=conf_f,
@@ -79,6 +86,8 @@ async def evolution_status(request: Request) -> EvolutionStatusResponse:
         idle_schedule_interval_s=(settings.evolution_idle_schedule_interval_s if sched_on else None),
         knowledge_enabled=bool(settings.evolution_knowledge_enabled),
         knowledge_chunk_count=kg_n,
+        autonomy_tier=str(atier),
+        autonomy_note=anote,
     )
 
 

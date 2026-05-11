@@ -6,18 +6,31 @@ import { HudSectionTitle } from "@/components/hud-section-title";
 import { Button } from "@/components/ui/button";
 import { useConfig } from "@/context/config-context";
 import {
+  fetchAutoworkStatus,
   fetchSystemErrors,
   fetchSystemHealth,
   fetchSystemPatchQueue,
+  postAutoworkTick,
   postSystemAudit,
   postSystemRepair,
   type SystemAuditResponse,
+  type SystemAutoworkStatus,
   type SystemErrorsPayload,
   type SystemHealth,
   type SystemPatchRow,
   type SystemRepairResponse,
 } from "@/lib/api";
+import { OPERATOR_TAKEOVER_LINES } from "@/lib/operator-takeover";
 import { cn } from "@/lib/utils";
+
+function errorWithTakeover(e: unknown): { message: string; lines: string[] } {
+  if (e instanceof Error && "operatorTakeover" in e) {
+    const lines = (e as Error & { operatorTakeover?: string[] }).operatorTakeover;
+    if (lines?.length) return { message: e.message, lines };
+  }
+  if (e instanceof Error) return { message: e.message, lines: [...OPERATOR_TAKEOVER_LINES] };
+  return { message: "Request failed", lines: [...OPERATOR_TAKEOVER_LINES] };
+}
 
 export function SystemEvolutionPage() {
   const { config } = useConfig();
@@ -28,18 +41,24 @@ export function SystemEvolutionPage() {
   const [repair, setRepair] = useState<SystemRepairResponse | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [operatorTakeover, setOperatorTakeover] = useState<string[] | null>(null);
+  const [autowork, setAutowork] = useState<SystemAutoworkStatus | null>(null);
+  const [autoworkBusy, setAutoworkBusy] = useState(false);
 
   const refresh = useCallback(async () => {
     setMsg(null);
+    setOperatorTakeover(null);
     try {
-      const [h, e, q] = await Promise.all([
+      const [h, e, q, aw] = await Promise.all([
         fetchSystemHealth(config.apiBaseUrl),
         fetchSystemErrors(config.apiBaseUrl),
         fetchSystemPatchQueue(config.apiBaseUrl),
+        fetchAutoworkStatus(config.apiBaseUrl).catch(() => null),
       ]);
       setHealth(h);
       setErrors(e);
       setPatches(q.patches ?? []);
+      setAutowork(aw);
     } catch (e) {
       setHealth(null);
       setErrors(null);
@@ -57,11 +76,14 @@ export function SystemEvolutionPage() {
   const onAudit = async () => {
     setBusy("audit");
     setAudit(null);
+    setOperatorTakeover(null);
     try {
       const r = await postSystemAudit(config.apiBaseUrl, { mode: "audit", run_tools: false });
       setAudit(r);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Audit failed");
+      const { message, lines } = errorWithTakeover(e);
+      setMsg(message);
+      setOperatorTakeover(lines);
     } finally {
       setBusy(null);
     }
@@ -70,18 +92,39 @@ export function SystemEvolutionPage() {
   const onRepair = async () => {
     setBusy("repair");
     setRepair(null);
+    setOperatorTakeover(null);
     try {
       const r = await postSystemRepair(config.apiBaseUrl, { context: "Operator requested diagnostic from Evolution UI." });
       setRepair(r);
     } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Repair analysis failed");
+      const { message, lines } = errorWithTakeover(e);
+      setMsg(message);
+      setOperatorTakeover(lines);
     } finally {
       setBusy(null);
     }
   };
 
+  const onAutoworkTick = async () => {
+    setAutoworkBusy(true);
+    setMsg(null);
+    try {
+      await postAutoworkTick(config.apiBaseUrl);
+      await refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Autowork tick failed");
+    } finally {
+      setAutoworkBusy(false);
+    }
+  };
+
   const score = health?.health_score ?? null;
   const status = health?.status ?? "—";
+
+  const takeoverLines =
+    operatorTakeover ??
+    (repair?.operator_takeover_checklist?.length ? repair.operator_takeover_checklist : null) ??
+    (audit?.operator_takeover_checklist?.length ? audit.operator_takeover_checklist : null);
 
   return (
     <div className="space-y-6">
@@ -90,9 +133,18 @@ export function SystemEvolutionPage() {
           <p className="text-[10px] font-semibold uppercase tracking-[0.35em] text-muted-foreground">Phase 6</p>
           <h2 className="mt-1 text-2xl font-semibold tracking-tight">System evolution</h2>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-            Local-first health, diagnostics, and approval-gated change. No silent patches — prepare/apply flows live on
-            the API.
+            Local-first health, diagnostics, and approval-gated change. Self-healing here means <strong>analysis + logged
+            suggestions</strong> — it does not move your mouse, type keys, or apply patches without your explicit
+            actions (safety by design).
           </p>
+          {autowork ? (
+            <p className="mt-3 max-w-xl text-[11px] text-muted-foreground">
+              Autowork: {autowork.enabled ? "enabled" : "disabled"} on API
+              {autowork.schedule_enabled ? " · scheduled" : ""}
+              {autowork.restart_pending ? " · restart request file pending" : ""}. Does not auto-apply git patches or
+              restart uvicorn in-process — see <span className="font-mono">data_dir/autowork/</span>.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => void refresh()} className="border-[hsl(var(--neon))]/40">
@@ -107,13 +159,39 @@ export function SystemEvolutionPage() {
             {busy === "repair" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Stethoscope className="mr-2 h-4 w-4" />}
             Run self-healing scan
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void onAutoworkTick()}
+            disabled={autoworkBusy || autowork?.enabled !== true}
+            className="border-border/60"
+          >
+            {autoworkBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wrench className="mr-2 h-4 w-4" />}
+            Autowork tick
+          </Button>
         </div>
       </div>
 
       {msg ? (
-        <p className="text-sm text-amber-500" role="status">
+        <p className="whitespace-pre-wrap text-sm text-amber-500" role="status">
           {msg}
         </p>
+      ) : null}
+
+      {takeoverLines?.length ? (
+        <GlassPanel className="border-amber-500/30 bg-amber-500/5 p-5">
+          <HudSectionTitle eyebrow="Human in the loop" title="You take control — keyboard, screen, Terminal" />
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            When the API hits an exception or incomplete signals, JARVIS asks you to operate the Mac directly: read the
+            screen (Copilot / screen endpoints), copy errors into repair context, run suggested commands yourself only
+            after you understand them.
+          </p>
+          <ul className="mt-3 list-disc space-y-2 pl-5 text-xs text-foreground">
+            {takeoverLines.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+        </GlassPanel>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-3">

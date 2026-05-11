@@ -25,10 +25,30 @@
 - **Agents**: [`apps/api/app/agents/self_healing_agent.py`](../apps/api/app/agents/self_healing_agent.py), [`apps/api/app/agents/code_audit_agent.py`](../apps/api/app/agents/code_audit_agent.py)
 - **Desktop**: [`apps/desktop/src/features/evolution/SystemEvolutionPage.tsx`](../apps/desktop/src/features/evolution/SystemEvolutionPage.tsx) (route `/evolution`)
 
+## Autowork (bounded self-maintenance)
+
+Opt-in maintenance loop for the monorepo under `JARVIS_REPO_ROOT`:
+
+- **`GET /system/autowork/status`** — last run JSON, restart-request file presence.
+- **`POST /system/autowork/tick`** — requires `JARVIS_AUTOWORK_ENABLED=true`. Runs `run_repo_checks` when subprocesses are allowed, optional `poetry install` / `ruff --fix` / `npm run build`, and logs `autowork_tick` to Phase 8 evolution events.
+- **Scheduler:** `JARVIS_AUTOWORK_SCHEDULE_ENABLED=true` with the same `AUTOWORK_ENABLED` gate.
+- **Restart:** the API **never** kills itself. With `JARVIS_AUTOWORK_RESTART_REQUEST_ON_GREEN=true`, a green `repo_checks` run writes `data_dir/autowork/RESTART_REQUESTED.json` for an external supervisor or you to restart.
+- **Code changes** still use the signed patch flow (`/system/improve/*`) — autowork does not auto-apply diffs.
+
+## Autonomy tier (Phase 3 rail)
+
+| Value | Effect |
+|-------|--------|
+| `JARVIS_AUTONOMY_TIER=standard` (default) | Medium-risk automation steps still require a **challenge** token on `POST /workflows/run` and `POST /execute` before Hammerspoon runs. |
+| `JARVIS_AUTONOMY_TIER=elevated` | **Confirm**-tier steps run on the first POST (no second confirmation). **Restricted** patterns (e.g. `sudo`, destructive shell) stay blocked. Kill switch, sandbox, Slack send tokens, and git patch apply are **unchanged**. |
+
+Bypasses are written to the action log as `elevated_autonomy_confirm_tier_bypassed`. This is not macOS “super admin” and does not bypass TCC.
+
 ## Environment
 
 | Variable | Purpose |
 |----------|---------|
+| `JARVIS_AUTONOMY_TIER` | `standard` or `elevated` — see table above. |
 | `JARVIS_REPO_ROOT` | Absolute path to git monorepo root (patches, `git apply`, optional audits). |
 | `JARVIS_SYSTEM_ALLOW_SUBPROCESS` | When `true`, `POST /system/audit` with `run_tools: true` may run `ruff` / `mypy` / `pytest` under `apps/api`. |
 | `JARVIS_SYSTEM_PATCHES_ENABLED` | Must be `true` to allow `improve/apply` and `rollback`. |

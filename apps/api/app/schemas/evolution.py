@@ -41,6 +41,8 @@ class EvolutionStatusResponse(BaseModel):
     )
     knowledge_enabled: bool = Field(default=True, description="Local KG + embeddings feature gate")
     knowledge_chunk_count: int = Field(default=0, ge=0, description="Rows in kg_chunks table")
+    autonomy_tier: str = Field(default="standard", description="Mirrors JARVIS_AUTONOMY_TIER (automation rail)")
+    autonomy_note: str = Field(default="", description="Short explanation of confirm-challenge behavior")
 
 
 class EvolutionIdleResponse(BaseModel):
