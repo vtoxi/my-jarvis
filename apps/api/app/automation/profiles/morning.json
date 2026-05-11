@@ -1,0 +1,11 @@
+{
+  "id": "morning",
+  "label": "Morning office mode",
+  "steps": [
+    { "type": "open_app", "target": "slack", "tier": "safe" },
+    { "type": "open_app", "target": "mail", "tier": "safe" },
+    { "type": "open_app", "target": "calendar", "tier": "safe" },
+    { "type": "open_app", "target": "cursor", "tier": "safe" },
+    { "type": "open_url", "target": "https://linear.app", "tier": "confirm" }
+  ]
+}

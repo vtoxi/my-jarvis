@@ -1,0 +1,10 @@
+{
+  "id": "meetings",
+  "label": "Meeting mode",
+  "steps": [
+    { "type": "open_app", "target": "slack", "tier": "safe" },
+    { "type": "open_app", "target": "calendar", "tier": "safe" },
+    { "type": "open_app", "target": "zoom", "tier": "confirm" },
+    { "type": "open_app", "target": "notes", "tier": "safe" }
+  ]
+}

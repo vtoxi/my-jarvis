@@ -1,0 +1,10 @@
+{
+  "id": "coding",
+  "label": "Coding mode",
+  "steps": [
+    { "type": "open_app", "target": "cursor", "tier": "safe" },
+    { "type": "open_app", "target": "terminal", "tier": "safe" },
+    { "type": "open_url", "target": "https://github.com", "tier": "safe" },
+    { "type": "open_url", "target": "https://developer.apple.com/documentation/", "tier": "confirm" }
+  ]
+}

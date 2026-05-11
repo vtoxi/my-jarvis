@@ -1,0 +1,13 @@
+{
+  "name": "my-jarvis",
+  "private": true,
+  "workspaces": [
+    "apps/desktop"
+  ],
+  "scripts": {
+    "dev": "npm run dev -w my-jarvis-desktop",
+    "build": "npm run build -w my-jarvis-desktop",
+    "lint": "npm run lint -w my-jarvis-desktop",
+    "typecheck": "npm run typecheck -w my-jarvis-desktop"
+  }
+}

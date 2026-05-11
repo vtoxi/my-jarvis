@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 222 47% 5%;
+    --foreground: 210 40% 98%;
+    --muted: 217 33% 12%;
+    --muted-foreground: 215 20% 55%;
+    --border: 217 33% 14%;
+    --input: 217 33% 14%;
+    --ring: 187 100% 50%;
+    --primary: 187 100% 50%;
+    --primary-foreground: 222 47% 5%;
+    --card: 222 47% 7%;
+    --card-foreground: 210 40% 98%;
+    --radius: 0.5rem;
+    --radius-hud: 1rem;
+    --hud-bg: 222 47% 4%;
+    --hud-glass: 217 33% 10%;
+    --neon: 187 100% 50%;
+    --neon-amber: 38 92% 50%;
+    --neon-violet: 263 90% 65%;
+    --grid-opacity: 0.08;
+    --blur-glass: 16px;
+  }
+
+  [data-accent="cyan"] {
+    --neon: 187 100% 50%;
+    --ring: 187 100% 50%;
+    --primary: 187 100% 50%;
+  }
+
+  [data-accent="amber"] {
+    --neon: var(--neon-amber);
+    --ring: 38 92% 50%;
+    --primary: 38 92% 50%;
+  }
+
+  [data-accent="violet"] {
+    --neon: var(--neon-violet);
+    --ring: 263 90% 65%;
+    --primary: 263 90% 65%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--hud-glass) / 0.55) 0%,
+      hsl(var(--hud-glass) / 0.25) 100%
+    );
+    backdrop-filter: blur(var(--blur-glass));
+    border: 1px solid hsl(var(--border) / 0.8);
+    box-shadow: 0 0 0 1px hsl(var(--neon) / 0.08), 0 20px 50px -20px hsl(0 0% 0% / 0.65);
+  }
+
+  .hud-grid-bg {
+    background-image: linear-gradient(hsl(var(--foreground) / var(--grid-opacity)) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--foreground) / var(--grid-opacity)) 1px, transparent 1px);
+    background-size: 48px 48px;
+  }
+
+  .neon-text {
+    color: hsl(var(--neon));
+    text-shadow: 0 0 24px hsl(var(--neon) / 0.45);
+  }
+
+  .neon-border {
+    box-shadow: 0 0 0 1px hsl(var(--neon) / 0.35), 0 0 32px hsl(var(--neon) / 0.12);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

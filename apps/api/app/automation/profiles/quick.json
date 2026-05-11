@@ -1,0 +1,8 @@
+{
+  "id": "quick",
+  "label": "Quick safe stack",
+  "steps": [
+    { "type": "open_app", "target": "slack", "tier": "safe" },
+    { "type": "open_app", "target": "mail", "tier": "safe" }
+  ]
+}
